@@ -3,11 +3,13 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Content
-from .utils.compatibility import get_compatibility_score
+from .utils.score import get_final_score
 from .utils.fallback import get_fallback_content
 from .utils.broadcast import broadcast_download
 from .utils.load_balancer import select_best_content
 from django.utils.timezone import now
+from django.http import FileResponse, Http404
+from django.utils import timezone
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -19,12 +21,16 @@ def get_best_content(request):
     if not device_info or not requested_name:
         return Response({'error': 'Invalid request'}, status=400)
 
-    # original 제외하고 해당 이름의 변형 콘텐츠만 필터링
-    contents = Content.objects.filter(name=requested_name).exclude(type='original')
+    # 콘텐츠 조회: original 포함한 전체
+    contents = Content.objects.filter(name=requested_name)
 
-    # 점수 계산
+    # high/normal/low 타입이 있으면 original 제외
+    if contents.exclude(type='original').exists():
+        contents = contents.exclude(type='original')
+
+    # 점수 계산 (호환성 + 실패율 패널티 포함)
     scored_contents = [
-        (get_compatibility_score(device_info, content.meta_info), content)
+        (get_final_score(content, device_info, content.meta_info), content)
         for content in contents
     ]
     scored_contents.sort(key=lambda x: x[0], reverse=True)
@@ -35,6 +41,7 @@ def get_best_content(request):
         if fallback:
             return Response({
                 'fallback': True,
+                'id': fallback.id,
                 'download_url': request.build_absolute_uri(fallback.file.url),
                 'type': fallback.type,
                 'version': fallback.version
@@ -50,6 +57,7 @@ def get_best_content(request):
 
     return Response({
         'fallback': False,
+        'id': best_content.id,
         'download_url': request.build_absolute_uri(best_content.file.url),
         'type': best_content.type,
         'version': best_content.version
@@ -74,7 +82,7 @@ def list_all_contents(request):
     return Response(data)
 
 
-# 관리자 콘텐츠 업로드용
+# 콘텐츠 업로드
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
 def upload_content(request):
@@ -82,15 +90,25 @@ def upload_content(request):
     version = request.data.get('version', '1.0.0')
     content_type = request.data.get('type', 'original')
     file = request.FILES.get('file')
+    meta_info = {
+        'required_chipset': request.POST.get('chipset'),
+        'min_memory': int(request.POST.get('min_memory', 0)),
+        'resolution': request.POST.get('resolution')
+    }
 
     if not file or not name:
         return Response({"error": "Missing required fields."}, status=400)
 
-    meta_info = {
-        'required_chipset': request.data.get('chipset', ''),
-        'min_memory': int(request.data.get('min_memory', 0)),
-        'resolution': request.data.get('resolution', '1080p')
-    }
+    if content_type == 'original':
+        existing = Content.objects.filter(name=name, type='original').first()
+        if existing:
+            # 기존 original에 최신업로드한 콘텐츠 덮어쓰기
+            existing.version = version
+            existing.file = file
+            existing.meta_info = meta_info
+            existing.uploaded_at = timezone.now()
+            existing.save()
+            return Response({'message': f'"{name}" original 콘텐츠가 업데이트되었습니다.', 'id': existing.id})
 
     content = Content.objects.create(
         name=name,
@@ -108,3 +126,11 @@ def upload_content(request):
         "type": content.type,
         "version": content.version
     })
+
+@api_view(['GET'])
+def download_proxy(request, content_id):
+    try:
+        content = Content.objects.get(id=content_id)
+        return FileResponse(content.file.open("rb"), as_attachment=True, filename=content.file.name)
+    except Content.DoesNotExist:
+        raise Http404("콘텐츠 없음")
