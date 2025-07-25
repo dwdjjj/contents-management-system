@@ -1,6 +1,7 @@
 "use client";
 
 import useDownloadSocket from "@/hooks/useDownloadSocket";
+import { fetchBestContent } from "@/hooks/useContent";
 import DownloadProgressBox from "@/components/DownloadProgressBox";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -29,6 +30,29 @@ export default function DashboardPage() {
     };
     fetchContents();
   }, []);
+
+  const handleDownload = async (contentName: string) => {
+    try {
+      const deviceInfo = {
+        chipset: "snapdragon888", // 실제 디바이스 info 전달하는 구조로 확장 가능
+        memory: 6,
+        resolution: "1080p",
+      };
+
+      const result = await fetchBestContent(deviceInfo, contentName);
+      const downloadUrl = "http://localhost:8000" + result.download_url;
+
+      // 파일 다운로드 트리거
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = contentName + "_" + result.type + ".bin";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: unknown) {
+      alert("다운로드 실패: " + err);
+    }
+  };
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
@@ -60,6 +84,14 @@ export default function DashboardPage() {
                 <td className="border p-2">{item.type}</td>
                 <td className="border p-2">
                   {new Date(item.uploaded_at).toLocaleString()}
+                </td>
+                <td className="border p-2">
+                  <button
+                    className="bg-blue-500 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm"
+                    onClick={() => handleDownload(item.name)}
+                  >
+                    다운로드
+                  </button>
                 </td>
               </tr>
             ))}
