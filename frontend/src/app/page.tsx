@@ -40,19 +40,23 @@ export default function DashboardPage() {
       };
 
       const result = await fetchBestContent(deviceInfo, contentName);
-      const downloadUrl = "http://localhost:8000" + result.download_url;
+      const proxyUrl = `http://localhost:8000/api/download/${result.id}/`;
 
-      // 파일 다운로드 트리거
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = contentName + "_" + result.type + ".bin";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = proxyUrl;
+      document.body.appendChild(iframe);
     } catch (err: unknown) {
       alert("다운로드 실패: " + err);
     }
   };
+
+  // 콘텐츠를 name 기준으로 그룹핑
+  const groupedContents = contents.reduce((acc, content) => {
+    if (!acc[content.name]) acc[content.name] = [];
+    acc[content.name].push(content);
+    return acc;
+  }, {} as Record<string, ContentItem[]>);
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
@@ -67,36 +71,39 @@ export default function DashboardPage() {
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-2">📝 업로드된 콘텐츠 목록</h2>
-        <table className="table-auto w-full text-sm border">
-          <thead>
-            <tr className="bg-gray-400">
-              <th className="border p-2">이름</th>
-              <th className="border p-2">버전</th>
-              <th className="border p-2">타입</th>
-              <th className="border p-2">업로드 시각</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contents.map((item) => (
-              <tr key={item.id}>
-                <td className="border p-2">{item.name}</td>
-                <td className="border p-2">{item.version}</td>
-                <td className="border p-2">{item.type}</td>
-                <td className="border p-2">
-                  {new Date(item.uploaded_at).toLocaleString()}
-                </td>
-                <td className="border p-2">
-                  <button
-                    className="bg-blue-500 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm"
-                    onClick={() => handleDownload(item.name)}
-                  >
-                    다운로드
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {Object.entries(groupedContents).map(([name, items]) => (
+          <div key={name} className="mb-4 border border-gray-300 rounded">
+            <div className="bg-gray-300 px-4 py-2 flex justify-between items-center">
+              <span className="font-bold">{name}</span>
+              <button
+                onClick={() => handleDownload(name)}
+                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+              >
+                다운로드
+              </button>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-200 text-gray-800 font-semibold text-left">
+                  <th className="px-4 py-2 w-1/4">타입</th>
+                  <th className="px-4 py-2 w-1/4">버전</th>
+                  <th className="px-4 py-2">업로드 시각</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t">
+                    <td className="px-4 py-2">{item.type}</td>
+                    <td className="px-4 py-2">{item.version}</td>
+                    <td className="px-4 py-2">
+                      {new Date(item.uploaded_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
       </section>
 
       <section>
