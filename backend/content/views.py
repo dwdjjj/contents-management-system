@@ -6,6 +6,7 @@ from .models import Content
 from .utils.compatibility import get_compatibility_score
 from .utils.fallback import get_fallback_content
 from .utils.broadcast import broadcast_download
+from .utils.load_balancer import select_best_content
 from django.utils.timezone import now
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
@@ -18,36 +19,38 @@ def get_best_content(request):
     if not device_info or not requested_name:
         return Response({'error': 'Invalid request'}, status=400)
 
+    # original 제외하고 해당 이름의 변형 콘텐츠만 필터링
     contents = Content.objects.filter(name=requested_name).exclude(type='original')
+
+    # 점수 계산
     scored_contents = [
         (get_compatibility_score(device_info, content.meta_info), content)
         for content in contents
     ]
     scored_contents.sort(key=lambda x: x[0], reverse=True)
 
+    # fallback 요청인 경우
     if failed_content_id:
         fallback = get_fallback_content(scored_contents, int(failed_content_id))
         if fallback:
             return Response({
                 'fallback': True,
-                'download_url': fallback.file.url,
+                'download_url': request.build_absolute_uri(fallback.file.url),
                 'type': fallback.type,
                 'version': fallback.version
             })
         else:
             return Response({'error': 'No fallback available'}, status=404)
 
-    from .utils.load_balancer import select_best_content
+    # 최초 요청인 경우: 로드밸런싱 알고리즘 선택
     best_content = select_best_content(scored_contents)
 
     if not best_content:
         return Response({'error': 'No content found'}, status=404)
 
-    broadcast_download(best_content.name, device_info)
-
     return Response({
         'fallback': False,
-        'download_url': best_content.file.url,
+        'download_url': request.build_absolute_uri(best_content.file.url),
         'type': best_content.type,
         'version': best_content.version
     })
