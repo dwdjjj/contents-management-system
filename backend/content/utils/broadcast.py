@@ -3,13 +3,15 @@ from asgiref.sync import async_to_sync
 
 def broadcast_download(request_id, content_name, client_id, progress):
     channel_layer = get_channel_layer()
+    group_name = f"downloads_{client_id}"
     async_to_sync(channel_layer.group_send)(
-        "downloads",
+        group_name,
         {
-            "type": "download.event",
-            "request_id": request_id,
+            "type":    "download.progress",
+            "job_id":  request_id,
+            "status":  "in_progress" if progress < 100 else "success",
+            "percent": progress,
             "content_name": content_name,
-            "client_id": client_id,
-            "progress": progress,
+            "client_id":    client_id,
         }
     )

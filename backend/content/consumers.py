@@ -21,4 +21,6 @@ class DownloadConsumer(AsyncJsonWebsocketConsumer):
             "job_id":  event["job_id"],
             "status":  event["status"],
             "percent": event["percent"],
+            "content_name": event["content_name"],
+            "client_id":    event["client_id"],
         })

@@ -52,10 +52,12 @@ def process_download_job(self, job_id):
         async_to_sync(channel_layer.group_send)(
             group_name,
             {
-                "type":    "download.progress",
-                "job_id":  job.id,
-                "status":  job.status,
-                "percent": job.percent,
+                "type":         "download.progress",
+                "job_id":       job.id,
+                "status":       job.status,
+                "percent":      job.percent,
+                "content_name": job.content.name,
+                "client_id":    job.client_id,
             }
         )
 
@@ -69,7 +71,7 @@ def process_download_job(self, job_id):
 
         # 2) 단계별 진행률 업데이트
         for step in range(1, 11):
-            time.sleep(0.3)  # 실제 파일 전송 로직으로 교체 가능
+            time.sleep(0.1)  # 실제 파일 전송 로직으로 교체 가능
             job.percent = step * 10
             job.save()
             broadcast()

@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -8,7 +8,7 @@ from .utils.fallback import get_fallback_content
 from .utils.broadcast import broadcast_download
 from .utils.load_balancer import select_best_content
 from django.utils.timezone import now
-from django.http import FileResponse, Http404
+from django.http import FileResponse
 from django.utils import timezone
 import time
 from .models import DownloadJob, Content
@@ -139,51 +139,34 @@ def upload_content(request):
 
 @api_view(['GET'])
 def download_proxy(request, content_id):
-    try:
-        content = Content.objects.get(id=content_id)
-        request_id = f"{content.name}-{content.id}"
-        client_id = request.META.get("REMOTE_ADDR", "client-x")
+    # 콘텐츠 & 클라이언트 식별
+    content = get_object_or_404(Content, id=content_id)
+    client_id = request.GET.get('client_id')
 
-        # 25% 단위로 진행 상황 발행
-        for p in [0, 25, 50, 75, 100]:
-            broadcast_download(
-                request_id=request_id,
-                content_name=content.name,
-                client_id=client_id,
-                progress=p
-            )
-            # 실제 비동기 환경의 경우 진짜 작업 완료 시점에서만 호출하도록 변경해야함
-            time.sleep(0.1)
-
-        return FileResponse(
-            content.file.open("rb"),
-            as_attachment=True,
-            filename=content.file.name
-        )
-    except Content.DoesNotExist:
-        raise Http404("콘텐츠 없음")
-    
-@api_view(['POST'])
-def enqueue_download(request):
-    content_id = request.data.get('content_id')
-    client_id  = request.data.get('client_id')
-    tier       = request.data.get('tier', 'free')
+    # 클라이언트 계층별 우선순위 매핑
+    tier          = request.GET.get('tier', 'free')  # ?tier=standard 등으로 전달
     tier_priority = {'free': 0, 'standard': 1, 'premium': 2}
-    priority   = tier_priority.get(tier, 0)
+    priority      = tier_priority.get(tier, 0)
 
-    # 유효성 검증
-    try:
-        content = Content.objects.get(pk=content_id)
-    except Content.DoesNotExist:
-        return Response({'error': 'Invalid content_id'}, status=400)
-
+    # 다운로드 큐에 등록 (priority 반영)
     job = DownloadJob.objects.create(
         content=content,
         client_id=client_id,
         priority=priority,
     )
-
-    # 대기열 스케줄러 실행
+    # 큐 스케줄러 실행
     schedule_downloads.delay()
 
-    return Response({'job_id': job.id}, status=201)
+    request_id = f"{content.name}-{job.id}"
+
+    # 25% 단위로 진행 상황 발행
+    for progress in [0, 25, 50, 75, 100]:
+        broadcast_download(request_id, content.name, client_id, progress)
+        time.sleep(0.1)
+
+    # 파일 스트리밍
+    return FileResponse(
+        content.file.open('rb'),
+        as_attachment=True,
+        filename=content.file.name
+    )
