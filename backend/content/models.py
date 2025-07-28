@@ -21,7 +21,18 @@ class Content(models.Model):
     version = models.CharField(max_length=20, default='1.0.0')
     type = models.CharField(max_length=20, choices=ContentType.choices, default=ContentType.ORIGINAL)
     file = models.FileField(upload_to='uploads/')
-    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    parent = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='variants'
+    )
+    conversion_status = models.CharField(
+        max_length=20,
+        choices=ConversionStatus.choices,
+        default=ConversionStatus.PENDING
+    )
 
     # 자동 변환 파이프라인 상태를 저장
     conversion_status = models.CharField(

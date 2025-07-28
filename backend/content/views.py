@@ -66,22 +66,29 @@ def get_best_content(request):
 
 @api_view(['GET'])
 def list_all_contents(request):
-    contents = Content.objects.all().order_by('-uploaded_at')
-    domain = request.build_absolute_uri('/')[:-1]  # ex) http://localhost:8000
-    
-    data = [
-        {
-            'id': c.id,
-            'name': c.name,
-            'type': c.type,
-            'version': c.version,
-            'uploaded_at': c.uploaded_at,
-            'download_url': domain + c.file.url
-        }
-        for c in contents
-    ]
-    return Response(data)
+    originals = Content.objects.filter(type='original').order_by('-uploaded_at')
+    data = []
+    for orig in originals:
+        # parent가 orig인 자식 레코드를 직접 쿼리
+        variants = Content.objects.filter(parent=orig)
 
+        data.append({
+            'id': orig.id,
+            'name': orig.name,
+            'type': orig.type,
+            'version': orig.version,
+            'uploaded_at': orig.uploaded_at,
+            'conversion_status': orig.conversion_status,
+            'variants': [
+                {
+                    'id': v.id,
+                    'type': v.type,
+                    'version': v.version,
+                    'url': request.build_absolute_uri(v.file.url),
+                } for v in orig.variants.all()
+            ]
+        })
+    return Response(data)
 
 # 콘텐츠 업로드
 @api_view(['POST'])

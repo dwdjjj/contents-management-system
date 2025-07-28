@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'content',
+    'content.apps.ContentConfig',
     'channels',
     'corsheaders',
     'django_celery_results',
