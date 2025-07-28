@@ -10,6 +10,7 @@ backend/media
 *.db
 env/
 venv/
+.venv/
 
 # Next.js
 frontend/.next/
