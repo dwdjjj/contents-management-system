@@ -15,7 +15,9 @@ class DownloadTrackingConsumer(AsyncWebsocketConsumer):
 
     async def download_event(self, event):
         await self.send(text_data=json.dumps({
-            'type': 'download',
-            'content_name': event['content_name'],
-            'client': event['client']
-        }))
+        'type': 'progress',
+        'request_id': event['request_id'],
+        'content_name': event['content_name'],
+        'client_id': event['client_id'],
+        'progress': event['progress'],
+    }))

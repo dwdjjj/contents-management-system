@@ -10,6 +10,7 @@ from .utils.load_balancer import select_best_content
 from django.utils.timezone import now
 from django.http import FileResponse, Http404
 from django.utils import timezone
+import time
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -131,6 +132,24 @@ def upload_content(request):
 def download_proxy(request, content_id):
     try:
         content = Content.objects.get(id=content_id)
-        return FileResponse(content.file.open("rb"), as_attachment=True, filename=content.file.name)
+        request_id = f"{content.name}-{content.id}"
+        client_id = request.META.get("REMOTE_ADDR", "client-x")
+
+        # 25% 단위로 진행 상황 발행
+        for p in [0, 25, 50, 75, 100]:
+            broadcast_download(
+                request_id=request_id,
+                content_name=content.name,
+                client_id=client_id,
+                progress=p
+            )
+            # 실제 비동기 환경의 경우 진짜 작업 완료 시점에서만 호출하도록 변경해야함
+            time.sleep(0.1)
+
+        return FileResponse(
+            content.file.open("rb"),
+            as_attachment=True,
+            filename=content.file.name
+        )
     except Content.DoesNotExist:
         raise Http404("콘텐츠 없음")
