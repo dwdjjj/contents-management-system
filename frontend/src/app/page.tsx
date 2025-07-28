@@ -63,7 +63,7 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">실시간 다운로드 대시보드</h1>
         <Link href="/upload">
-          <button className="bg-green-600 text-white px-4 py-2 rounded">
+          <button className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
             + 콘텐츠 업로드
           </button>
         </Link>
@@ -107,7 +107,6 @@ export default function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-2">📦 다운로드 진행률</h2>
         <DownloadProgressBox />
       </section>
     </main>

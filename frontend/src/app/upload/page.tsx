@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function ContentUploadPage() {
   const [form, setForm] = useState({
@@ -15,6 +16,7 @@ export default function ContentUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const router = useRouter();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -42,7 +44,9 @@ export default function ContentUploadPage() {
     });
 
     if (res.ok) {
-      setMessage("✅ 업로드 완료!");
+      const data = await res.json();
+      alert("✅ 업로드 완료: " + data.name);
+      router.push("/"); // ✅ 대시보드로 이동
     } else {
       const data = await res.json();
       setMessage(`❌ 오류: ${data.error || "알 수 없는 오류"}`);
