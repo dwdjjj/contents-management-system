@@ -58,7 +58,7 @@ export default function ContentUploadPage() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">콘텐츠 업로드</h1>
         <Link href="/">
-          <button className="text-sm underline text-gray-600 hover:text-white">
+          <button className="text-sm underline text-gray-600 hover:text-white hover:cursor-pointer">
             ← 대시보드로
           </button>
         </Link>
@@ -111,7 +111,7 @@ export default function ContentUploadPage() {
           <button
             type="button"
             onClick={handleFileClick}
-            className="bg-gray-500 px-4 py-2 border rounded hover:bg-gray-200 hover:text-zinc-500"
+            className="bg-gray-400 px-4 py-2 border rounded hover:bg-gray-500 hover:cursor-pointer"
           >
             📁 파일 선택
           </button>
@@ -131,14 +131,14 @@ export default function ContentUploadPage() {
           <Link href="/">
             <button
               type="button"
-              className="border px-4 py-2 rounded bg-red-500 hover:text-zinc-600"
+              className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 hover:cursor-pointer"
             >
               취소
             </button>
           </Link>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hover:cursor-pointer"
           >
             업로드
           </button>
