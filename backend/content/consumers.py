@@ -1,23 +1,24 @@
-import json
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-class DownloadTrackingConsumer(AsyncWebsocketConsumer):
+class DownloadConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        await self.channel_layer.group_add("downloads", self.channel_name)
+        # URL 라우팅에서 client_id 를 받아 그룹을 동적으로 지정
+        self.client_id = self.scope['url_route']['kwargs']['client_id']
+        self.group_name = f"downloads_{self.client_id}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard("downloads", self.channel_name)
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
-        # 클라이언트가 메시지를 보낼 경우 처리
+        # 클라이언트 -> 서버 메시지 추가 예정
         pass
 
-    async def download_event(self, event):
-        await self.send(text_data=json.dumps({
-        'type': 'progress',
-        'request_id': event['request_id'],
-        'content_name': event['content_name'],
-        'client_id': event['client_id'],
-        'progress': event['progress'],
-    }))
+    # 태스크에서 보낸 'type': 'download.progress' 이벤트 처리
+    async def download_progress(self, event):
+        await self.send_json({
+            "job_id":  event["job_id"],
+            "status":  event["status"],
+            "percent": event["percent"],
+        })

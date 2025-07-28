@@ -11,6 +11,8 @@ from django.utils.timezone import now
 from django.http import FileResponse, Http404
 from django.utils import timezone
 import time
+from .models import DownloadJob, Content
+from .tasks import schedule_downloads
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -160,3 +162,28 @@ def download_proxy(request, content_id):
         )
     except Content.DoesNotExist:
         raise Http404("콘텐츠 없음")
+    
+@api_view(['POST'])
+def enqueue_download(request):
+    content_id = request.data.get('content_id')
+    client_id  = request.data.get('client_id')
+    tier       = request.data.get('tier', 'free')
+    tier_priority = {'free': 0, 'standard': 1, 'premium': 2}
+    priority   = tier_priority.get(tier, 0)
+
+    # 유효성 검증
+    try:
+        content = Content.objects.get(pk=content_id)
+    except Content.DoesNotExist:
+        return Response({'error': 'Invalid content_id'}, status=400)
+
+    job = DownloadJob.objects.create(
+        content=content,
+        client_id=client_id,
+        priority=priority,
+    )
+
+    # 대기열 스케줄러 실행
+    schedule_downloads.delay()
+
+    return Response({'job_id': job.id}, status=201)

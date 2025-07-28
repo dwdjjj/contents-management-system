@@ -1,7 +1,11 @@
 from celery import shared_task
+from .models import Content, DownloadJob
+import os, time
 from django.core.files.base import ContentFile
-from .models import Content
-import os
+from django.utils import timezone
+from django.conf import settings
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
 def convert_content(self, content_id):
@@ -34,3 +38,77 @@ def convert_content(self, content_id):
         orig.conversion_status = Content.ConversionStatus.FAILED
         orig.save()
         raise self.retry(exc=e)
+    
+@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+def process_download_job(self, job_id):
+    job = DownloadJob.objects.get(pk=job_id)
+    if job.status != DownloadJob.STATUS_PENDING:
+        return
+    
+    # WebSocket 브로드캐스트
+    channel_layer = get_channel_layer()
+    group_name    = f"downloads_{job.client_id}"
+    def broadcast():
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type":    "download.progress",
+                "job_id":  job.id,
+                "status":  job.status,
+                "percent": job.percent,
+            }
+        )
+
+    try:
+        # 1) 상태 업데이트
+        job.status     = DownloadJob.STATUS_INPROGRESS
+        job.started_at = timezone.now()
+        job.attempts  += 1
+        job.percent    = 0
+        broadcast()
+
+        # 2) 단계별 진행률 업데이트
+        for step in range(1, 11):
+            time.sleep(0.3)  # 실제 파일 전송 로직으로 교체 가능
+            job.percent = step * 10
+            job.save()
+            broadcast()
+
+        # 3) 완료 처리
+        job.status      = DownloadJob.STATUS_SUCCESS
+        job.finished_at = timezone.now()
+        job.percent     = 100
+        job.save()
+        broadcast()
+
+    except Exception as exc:
+        # 오류 처리 & 재시도
+        job.status      = DownloadJob.STATUS_FAILED
+        job.finished_at = timezone.now()
+        job.save()
+        broadcast()
+        raise self.retry(exc=exc)
+
+    finally:
+        # 빈 슬롯이 생겼으니 다시 스케줄러 호출
+        schedule_downloads.delay()
+
+@shared_task
+def schedule_downloads():
+    """
+    진행중인(in_progress) 작업 수를 세고,
+    빈 슬롯만큼 pending 작업을 우선순위 순으로 꺼내어 처리 태스크 예약하기.
+    """
+    limit  = getattr(settings, "DOWNLOAD_CONCURRENCY_LIMIT", 3)
+    active = DownloadJob.objects.filter(status=DownloadJob.STATUS_INPROGRESS).count()
+    slots  = max(limit - active, 0)
+    if slots <= 0:
+        return
+
+    pending = (
+        DownloadJob.objects
+        .filter(status=DownloadJob.STATUS_PENDING)
+        .order_by("-priority", "requested_at")[:slots]
+    )
+    for job in pending:
+        process_download_job.delay(job.id)
