@@ -44,6 +44,37 @@ class Content(models.Model):
     def __str__(self):
         return f"{self.name} [{self.type}] v{self.version}"
     
+class DownloadJob(models.Model):
+    STATUS_PENDING    = 'pending'
+    STATUS_INPROGRESS = 'in_progress'
+    STATUS_SUCCESS    = 'success'
+    STATUS_FAILED     = 'failed'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_INPROGRESS, 'In Progress'),
+        (STATUS_SUCCESS, 'Success'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
+    content      = models.ForeignKey(Content, on_delete=models.CASCADE)
+    client_id    = models.CharField(max_length=255)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    started_at   = models.DateTimeField(null=True, blank=True)
+    finished_at  = models.DateTimeField(null=True, blank=True)
+    status       = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+    priority     = models.IntegerField(default=0)
+    attempts     = models.IntegerField(default=0)
+    percent      = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['-priority', 'requested_at']
+
+
+
 class DownloadHistory(models.Model):
     content = models.ForeignKey(Content, on_delete=models.CASCADE)
     client_id = models.CharField(max_length=255)  # 디바이스 UUID 혹은 키

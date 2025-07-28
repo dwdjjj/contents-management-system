@@ -47,6 +47,9 @@ INSTALLED_APPS = [
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
+# 동시 실행할 다운로드 작업 최대 개수
+DOWNLOAD_CONCURRENCY_LIMIT = 3
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
