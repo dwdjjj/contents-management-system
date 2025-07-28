@@ -22,3 +22,11 @@ export async function fetchBestContent(
 
   return await response.json();
 }
+
+export async function fetchDownloadHistory(clientId) {
+  const res = await fetch(
+    `http://localhost:8000/api/download-history/${clientId}/`
+  );
+  if (!res.ok) throw new Error("다운로드 기록 불러오기 실패");
+  return await res.json();
+}

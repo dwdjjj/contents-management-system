@@ -4,7 +4,7 @@ from django.http import StreamingHttpResponse, FileResponse
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Content, DownloadJob
+from .models import Content, DownloadJob, DownloadHistory
 from .utils.score import get_final_score
 from .utils.fallback import get_fallback_content
 from .utils.broadcast import broadcast_download
@@ -219,3 +219,21 @@ def download_proxy(request, content_id):
 
     return response
 
+@api_view(['GET'])
+def get_download_history(request, client_id):
+    histories = (
+        DownloadHistory.objects
+        .filter(client_id=client_id)
+        .order_by('-timestamp')[:20]  # 최근 20개만
+    )
+    data = [
+        {
+            "id": h.id,
+            "content": h.content.name,
+            "success": h.success,
+            "timestamp": h.timestamp,
+            "content_id": h.content.id
+        }
+        for h in histories
+    ]
+    return Response(data)
