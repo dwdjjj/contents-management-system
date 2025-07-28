@@ -14,23 +14,42 @@ export default function DownloadProgressList() {
       ) : (
         progresses.map((item) => {
           const percent = Math.min(item.percent, 100);
-          const isCompleted = percent >= 100;
+          const isCompleted = item.status === "success" || percent >= 100;
+
+          const statusLabel = {
+            pending: "대기 중",
+            in_progress: "진행 중",
+            success: "완료",
+            failed: "실패",
+          }[item.status];
+
           return (
             <div
               key={item.request_id}
-              className="bg-gray-400 p-3 rounded shadow"
+              className={`p-3 rounded shadow
+                ${isCompleted ? "bg-green-50" : "bg-gray-200"}`}
             >
               <div className="flex justify-between text-sm font-semibold mb-1">
                 <span>
                   {item.content}{" "}
-                  {isCompleted && <span className="text-green-600">완료</span>}
+                  <span
+                    className={`ml-1 ${
+                      item.status === "success"
+                        ? "text-green-600"
+                        : item.status === "failed"
+                        ? "text-red-600"
+                        : "text-blue-600"
+                    }`}
+                  >
+                    {statusLabel}
+                  </span>
                 </span>
                 <span>{percent}%</span>
               </div>
 
               <div className="w-full bg-white h-3 rounded overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 bg-blue-600`}
+                  className="h-full transition-all duration-300 bg-blue-600"
                   style={{ width: `${percent}%` }}
                 />
               </div>

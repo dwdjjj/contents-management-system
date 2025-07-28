@@ -3,6 +3,8 @@ import { create } from "zustand";
 type ProgressInfo = {
   request_id: string;
   status: string;
+  content: string;
+  clientId: string;
   percent: number;
 };
 
@@ -25,7 +27,6 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
           )
         : // 새 항목 추가
           [...state.progressList, progress];
-
       return { progressList: updated };
     }),
 }));

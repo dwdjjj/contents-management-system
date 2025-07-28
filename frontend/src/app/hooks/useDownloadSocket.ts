@@ -10,6 +10,8 @@ interface ProgressEvent {
   job_id: string;
   status: string;
   percent: number;
+  content_name: string;
+  client_id: string;
 }
 
 // clientId를 동적으로 삽입
@@ -44,6 +46,8 @@ export default function useDownloadSocket(clientId: string) {
           request_id: data.job_id,
           status: data.status,
           percent: data.percent,
+          content: data.content_name,
+          clientId: data.client_id,
         });
       } catch (e) {
         console.error("[WS] Message parse error", e);
