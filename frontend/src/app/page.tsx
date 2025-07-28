@@ -24,7 +24,10 @@ interface ContentItem {
 }
 
 export default function DashboardPage() {
-  useDownloadSocket(); // WebSocket 연결 시작
+  // 실제 디바이스별 고유 ID
+  const clientId = "test-device-1";
+  // clientId별 그룹으로 WebSocket 연결
+  useDownloadSocket(clientId);
 
   const [contents, setContents] = useState<ContentItem[]>([]);
 
@@ -44,14 +47,16 @@ export default function DashboardPage() {
   }, []);
 
   const handleDownload = async (contentName: string) => {
+    // 현재 로그인한 유저의 계층
+    const userTier = "premium";
     try {
       const deviceInfo = {
         chipset: "snapdragon888",
         memory: 6,
         resolution: "1080p",
       };
-      const result = await fetchBestContent(deviceInfo, contentName);
-      const proxyUrl = `http://localhost:8000/api/download/${result.id}/`;
+      const res = await fetchBestContent(deviceInfo, contentName);
+      const proxyUrl = `http://localhost:8000/api/download/${res.id}/?client_id=${clientId}&tier=${userTier}`;
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
       iframe.src = proxyUrl;

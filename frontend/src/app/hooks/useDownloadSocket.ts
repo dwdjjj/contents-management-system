@@ -1,13 +1,19 @@
 "use client";
-import { useCallback } from "react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useDownloadStore } from "@/store/downloadStore";
 
-const WS_URL = "ws://localhost:8001/ws/downloads/";
+const WS_BASE_URL = "ws://localhost:8001/ws/downloads/";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 초기 재연결 시간 1초
 
-export default function useDownloadSocket() {
+interface ProgressEvent {
+  job_id: string;
+  status: string;
+  percent: number;
+}
+
+// clientId를 동적으로 삽입
+export default function useDownloadSocket(clientId: string) {
   const socketRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0); // 재시도 횟수
   const retryDelayRef = useRef(INITIAL_DELAY); // 재시도 지연
@@ -16,11 +22,12 @@ export default function useDownloadSocket() {
 
   const connect = useCallback(() => {
     if (!isMounted.current) return;
+    const wsUrl = `${WS_BASE_URL}${clientId}/`;
 
     console.log(
       `[WS] 연결 시도중... (시도횟수 : ${retryCountRef.current + 1})`
     );
-    const socket = new WebSocket(WS_URL);
+    const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -32,14 +39,12 @@ export default function useDownloadSocket() {
 
     socket.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === "progress") {
-          updateProgress(data.request_id, {
-            content: data.content_name,
-            clientId: data.client_id,
-            percent: data.progress,
-          });
-        }
+        const data: ProgressEvent = JSON.parse(event.data);
+        updateProgress({
+          request_id: data.job_id,
+          status: data.status,
+          percent: data.percent,
+        });
       } catch (e) {
         console.error("[WS] Message parse error", e);
       }
@@ -53,21 +58,17 @@ export default function useDownloadSocket() {
 
     socket.onclose = (event) => {
       console.warn("[WS] Disconnected", event);
-      if (!isMounted.current) return;
+      if (!isMounted.current || retryCountRef.current >= MAX_RETRIES) return;
 
-      if (retryCountRef.current < MAX_RETRIES) {
-        const delay = retryDelayRef.current;
-        console.log(`[WS] ${delay}m 후 재연결 시도...`);
-        setTimeout(() => {
-          retryCountRef.current += 1;
-          retryDelayRef.current *= 2;
-          connect();
-        }, delay);
-      } else {
-        console.error("[WS] 최대 재연결 시도 횟수 초과");
-      }
+      const delay = retryDelayRef.current;
+      console.log(`[WS] ${delay}m 후 재연결 시도...`);
+      setTimeout(() => {
+        retryCountRef.current += 1;
+        retryDelayRef.current *= 2;
+        connect();
+      }, delay);
     };
-  }, [updateProgress]);
+  }, [clientId, updateProgress]);
 
   useEffect(() => {
     isMounted.current = true;

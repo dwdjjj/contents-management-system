@@ -2,29 +2,29 @@ import { create } from "zustand";
 
 type ProgressInfo = {
   request_id: string;
-  content: string;
-  clientId: string;
+  status: string;
   percent: number;
 };
 
 type DownloadStore = {
   progressList: ProgressInfo[];
-  updateProgress: (
-    id: string,
-    partial: Omit<ProgressInfo, "request_id">
-  ) => void;
+  updateProgress: (progress: ProgressInfo) => void;
 };
 
 export const useDownloadStore = create<DownloadStore>((set) => ({
   progressList: [],
-  updateProgress: (id, partial) =>
+  updateProgress: (progress) =>
     set((state) => {
-      const exists = state.progressList.find((p) => p.request_id === id);
-      const newEntry = { request_id: id, ...partial };
-
+      const exists = state.progressList.find(
+        (p) => p.request_id === progress.request_id
+      );
       const updated = exists
-        ? state.progressList.map((p) => (p.request_id === id ? newEntry : p))
-        : [...state.progressList, newEntry];
+        ? // 기존 항목 업데이트
+          state.progressList.map((p) =>
+            p.request_id === progress.request_id ? progress : p
+          )
+        : // 새 항목 추가
+          [...state.progressList, progress];
 
       return { progressList: updated };
     }),
