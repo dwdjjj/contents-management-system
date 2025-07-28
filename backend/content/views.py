@@ -1,18 +1,19 @@
+import os, mimetypes
 from django.shortcuts import get_object_or_404
+from django.http import StreamingHttpResponse, FileResponse
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Content
+from .models import Content, DownloadJob
 from .utils.score import get_final_score
 from .utils.fallback import get_fallback_content
 from .utils.broadcast import broadcast_download
 from .utils.load_balancer import select_best_content
 from django.utils.timezone import now
-from django.http import FileResponse
 from django.utils import timezone
-import time
-from .models import DownloadJob, Content
+from django.db import transaction
 from .tasks import schedule_downloads
+from urllib.parse import quote
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -137,36 +138,84 @@ def upload_content(request):
         "version": content.version
     })
 
+CHUNK_SIZE = 8 * 1024  # 8KB
+
 @api_view(['GET'])
 def download_proxy(request, content_id):
+    from .models import DownloadHistory
+
     # 콘텐츠 & 클라이언트 식별
     content = get_object_or_404(Content, id=content_id)
-    client_id = request.GET.get('client_id')
+    client_id = request.GET.get('client_id') or request.META.get('REMOTE_ADDR','client-x')
 
     # 클라이언트 계층별 우선순위 매핑
     tier          = request.GET.get('tier', 'free')  # ?tier=standard 등으로 전달
     tier_priority = {'free': 0, 'standard': 1, 'premium': 2}
     priority      = tier_priority.get(tier, 0)
 
-    # 다운로드 큐에 등록 (priority 반영)
-    job = DownloadJob.objects.create(
+    # 다운로드 큐에 등록 (priority 반영) 및 중복 요청 방지
+    job = DownloadJob.objects.filter(
         content=content,
         client_id=client_id,
-        priority=priority,
-    )
+        status__in=[DownloadJob.STATUS_PENDING, DownloadJob.STATUS_INPROGRESS]
+    ).first()
+
+    if not job:
+        job = DownloadJob.objects.create(
+            content=content,
+            client_id=client_id,
+            priority=priority,
+        )
+
     # 큐 스케줄러 실행
-    schedule_downloads.delay()
+    transaction.on_commit(lambda: schedule_downloads.delay())
 
     request_id = f"{content.name}-{job.id}"
+    file_field = content.file
+    total_len  = file_field.size
 
-    # 25% 단위로 진행 상황 발행
-    for progress in [0, 25, 50, 75, 100]:
-        broadcast_download(request_id, content.name, client_id, progress)
-        time.sleep(0.1)
+    def stream_chunks():
+        sent = 0
+        try:
+            with file_field.open('rb') as f:
+                while True:
+                    chunk = f.read(CHUNK_SIZE)
+                    if not chunk:
+                        broadcast_download(request_id, content.name, client_id, 100)
+                        break
+                    sent += len(chunk)
+                    pct = int(sent * 100 / total_len)
+                    broadcast_download(request_id, content.name, client_id, pct)
+                    yield chunk
+            DownloadHistory.objects.create(
+                content=content,
+                client_id=client_id,
+                success=True
+            )
+        except Exception:
+            # 실패 기록 저장
+            DownloadHistory.objects.create(
+                content=content,
+                client_id=client_id,
+                success=False
+            )
+            raise
+        finally:
+            # 다운로드 완료 후 큐 정리
+            job.delete()
 
-    # 파일 스트리밍
-    return FileResponse(
-        content.file.open('rb'),
-        as_attachment=True,
-        filename=content.file.name
+    mime_type, _ = mimetypes.guess_type(file_field.path)
+    response = StreamingHttpResponse(
+        stream_chunks(),
+        content_type=mime_type or "application/octet-stream"
     )
+
+    filename = os.path.basename(file_field.name)
+    # RFC5987 방식으로 UTF-8 인코딩된 파일명 지정
+    response["Content-Disposition"] = (
+        f"attachment; filename*=UTF-8''{quote(filename)}"
+    )
+    response["Content-Length"] = str(total_len)
+
+    return response
+

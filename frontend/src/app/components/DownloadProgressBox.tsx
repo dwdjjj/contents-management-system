@@ -1,9 +1,20 @@
 "use client";
 
 import { useDownloadStore } from "@/store/downloadStore";
+import { useMemo } from "react";
 
 export default function DownloadProgressList() {
   const progresses = useDownloadStore((s) => s.progressList);
+
+  const uniqueProgresses = useMemo(() => {
+    const seen = new Set();
+    return progresses.filter((item) => {
+      const key = `${item.clientId}-${item.content}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [progresses]);
 
   return (
     <div className="mt-6 space-y-3">
@@ -12,7 +23,7 @@ export default function DownloadProgressList() {
       {progresses.length === 0 ? (
         <p className="text-gray-500 italic">현재 다운로드가 없습니다.</p>
       ) : (
-        progresses.map((item) => {
+        uniqueProgresses.map((item) => {
           const percent = Math.min(item.percent, 100);
           const isCompleted = item.status === "success" || percent >= 100;
 

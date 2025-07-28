@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import useDownloadSocket from "@/hooks/useDownloadSocket";
 import { fetchBestContent } from "@/hooks/useContent";
 import DownloadProgressBox from "@/components/DownloadProgressBox";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useDownloadStore } from "@/store/downloadStore";
 
 interface Variant {
   id: number;
@@ -31,6 +32,12 @@ export default function DashboardPage() {
 
   const [contents, setContents] = useState<ContentItem[]>([]);
 
+  const clearAll = useDownloadStore((s) => s.clearAll);
+
+  useEffect(() => {
+    clearAll();
+  }, [clearAll]);
+
   useEffect(() => {
     const fetchContents = async () => {
       try {
@@ -47,6 +54,8 @@ export default function DashboardPage() {
   }, []);
 
   const handleDownload = async (contentName: string) => {
+    clearAll(); // ← 이전 진행률 전부 삭제
+
     // 현재 로그인한 유저의 계층
     const userTier = "premium";
     try {
@@ -57,7 +66,11 @@ export default function DashboardPage() {
       };
       const res = await fetchBestContent(deviceInfo, contentName);
       const proxyUrl = `http://localhost:8000/api/download/${res.id}/?client_id=${clientId}&tier=${userTier}`;
+      const iframeId = `iframe-${res.id}`;
+      document.getElementById(iframeId)?.remove(); // 이전꺼 제거
+
       const iframe = document.createElement("iframe");
+      iframe.id = iframeId;
       iframe.style.display = "none";
       iframe.src = proxyUrl;
       document.body.appendChild(iframe);

@@ -4,8 +4,6 @@ import os, time
 from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.conf import settings
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
 def convert_content(self, content_id):
@@ -44,56 +42,6 @@ def process_download_job(self, job_id):
     job = DownloadJob.objects.get(pk=job_id)
     if job.status != DownloadJob.STATUS_PENDING:
         return
-    
-    # WebSocket 브로드캐스트
-    channel_layer = get_channel_layer()
-    group_name    = f"downloads_{job.client_id}"
-    def broadcast():
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                "type":         "download.progress",
-                "job_id":       job.id,
-                "status":       job.status,
-                "percent":      job.percent,
-                "content_name": job.content.name,
-                "client_id":    job.client_id,
-            }
-        )
-
-    try:
-        # 1) 상태 업데이트
-        job.status     = DownloadJob.STATUS_INPROGRESS
-        job.started_at = timezone.now()
-        job.attempts  += 1
-        job.percent    = 0
-        broadcast()
-
-        # 2) 단계별 진행률 업데이트
-        for step in range(1, 11):
-            time.sleep(0.1)  # 실제 파일 전송 로직으로 교체 가능
-            job.percent = step * 10
-            job.save()
-            broadcast()
-
-        # 3) 완료 처리
-        job.status      = DownloadJob.STATUS_SUCCESS
-        job.finished_at = timezone.now()
-        job.percent     = 100
-        job.save()
-        broadcast()
-
-    except Exception as exc:
-        # 오류 처리 & 재시도
-        job.status      = DownloadJob.STATUS_FAILED
-        job.finished_at = timezone.now()
-        job.save()
-        broadcast()
-        raise self.retry(exc=exc)
-
-    finally:
-        # 빈 슬롯이 생겼으니 다시 스케줄러 호출
-        schedule_downloads.delay()
 
 @shared_task
 def schedule_downloads():

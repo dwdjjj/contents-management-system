@@ -11,6 +11,7 @@ type ProgressInfo = {
 type DownloadStore = {
   progressList: ProgressInfo[];
   updateProgress: (progress: ProgressInfo) => void;
+  clearAll: () => void;
 };
 
 export const useDownloadStore = create<DownloadStore>((set) => ({
@@ -29,4 +30,5 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
           [...state.progressList, progress];
       return { progressList: updated };
     }),
+  clearAll: () => set({ progressList: [] }),
 }));
