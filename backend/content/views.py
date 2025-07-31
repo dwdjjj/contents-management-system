@@ -1,6 +1,6 @@
 import os, mimetypes
 from django.shortcuts import get_object_or_404
-from django.http import StreamingHttpResponse, FileResponse
+from django.http import StreamingHttpResponse
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser

@@ -35,12 +35,6 @@ export default function DashboardPage() {
       .catch((err) => console.error("콘텐츠 불러오기 실패:", err));
   }, []);
 
-  // 이름별로 (orig, variants) 그룹핑
-  const grouped = contents.reduce<Record<string, ContentItem>>((acc, item) => {
-    acc[item.name] = item;
-    return acc;
-  }, {});
-
   return (
     <main className="p-6 max-w-5xl mx-auto">
       <header className="flex justify-between items-center mb-6">

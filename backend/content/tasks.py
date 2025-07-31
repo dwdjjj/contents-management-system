@@ -1,8 +1,7 @@
 from celery import shared_task
 from .models import Content, DownloadJob
-import os, time
+import os
 from django.core.files.base import ContentFile
-from django.utils import timezone
 from django.conf import settings
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
