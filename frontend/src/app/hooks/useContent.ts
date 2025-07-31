@@ -24,6 +24,7 @@ export interface ContentItem {
 export async function fetchBestContent(
   deviceInfo: DeviceInfo,
   requestedContent: string,
+  clientId: string,
   failedId: number | null = null
 ): Promise<{
   id: number;
@@ -38,6 +39,7 @@ export async function fetchBestContent(
     body: JSON.stringify({
       device_info: deviceInfo,
       requested_content: requestedContent,
+      client_id: clientId,
       ...(failedId !== null && { failed_content_id: failedId }),
     }),
   });

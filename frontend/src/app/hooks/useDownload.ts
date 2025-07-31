@@ -1,4 +1,3 @@
-// hooks/useDownload.ts
 import { DeviceInfo, fetchBestContent } from "./useContent";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -11,9 +10,10 @@ const userTier = "premium";
  */
 export function useDownloadContent(clientId: string, deviceInfo: DeviceInfo) {
   const downloadContent = async (contentName: string) => {
-    const result = await fetchBestContent(deviceInfo, contentName);
+    const result = await fetchBestContent(deviceInfo, contentName, clientId); // ← clientId 전달 추가
     const proxyUrl = `${API_BASE}/api/download/${result.id}/?client_id=${clientId}&tier=${userTier}`;
     const iframeId = `iframe-${result.id}`;
+
     // 중복 iframe 제거
     document.getElementById(iframeId)?.remove();
     const iframe = document.createElement("iframe");

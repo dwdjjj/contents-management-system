@@ -41,7 +41,13 @@ def get_best_content(request):
 
     # fallback 요청인 경우
     if failed_content_id:
-        fallback = get_fallback_content(scored_contents, int(failed_content_id))
+        fallback = get_fallback_content(
+            scored_contents,
+            int(failed_content_id),
+            client_id=request.data.get('client_id'),
+            requested_name=requested_name
+        )
+
         if fallback:
             return Response({
                 'fallback': True,
