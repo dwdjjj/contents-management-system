@@ -3,37 +3,60 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useDownloadSocket from "@/hooks/useDownloadSocket";
-import { fetchContents, ContentItem } from "@/hooks/useContent";
+import { fetchContents, ContentItem, DeviceInfo } from "@/hooks/useContent";
 import { useDownloadContent } from "@/hooks/useDownload";
 import { useDownloadStore } from "@/store/downloadStore";
 import DownloadProgressBox from "@/components/DownloadProgressBox";
 
 export default function DashboardPage() {
-  const clientId = "test-device-1";
-  const deviceInfo = {
+  const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
+  const [contents, setContents] = useState<ContentItem[]>([]);
+
+  const dummyDeviceInfo = {
     chipset: "snapdragon888",
     memory: 6,
     resolution: "1080p",
   };
 
-  // clientId별 그룹으로 WebSocket 연결
-  useDownloadSocket(clientId);
-
-  // 다운로드, 재시도 로직
-  const { downloadContent } = useDownloadContent(clientId, deviceInfo);
-
-  const clearAll = useDownloadStore((s) => s.clearAll);
+  // 디바이스 정보 수신
   useEffect(() => {
-    clearAll();
-  }, [clearAll]);
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.chipset && data.memory && data.resolution) {
+          setDeviceInfo(data);
+          console.log("[WebView] 디바이스 정보 수신됨:", data);
+        }
+      } catch (e) {
+        console.warn("메시지 파싱 실패:", e);
+      }
+    };
 
-  const [contents, setContents] = useState<ContentItem[]>([]);
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
   // 콘텐츠 목록 불러오기
   useEffect(() => {
     fetchContents()
       .then(setContents)
       .catch((err) => console.error("콘텐츠 불러오기 실패:", err));
   }, []);
+
+  const clientId = "test-device-1";
+  // clientId별 그룹으로 WebSocket 연결
+  useDownloadSocket(clientId);
+
+  // 다운로드, 재시도 로직
+  const { downloadContent } = useDownloadContent(
+    clientId,
+    deviceInfo || dummyDeviceInfo
+  );
+
+  const clearAll = useDownloadStore((s) => s.clearAll);
+  useEffect(() => {
+    clearAll();
+  }, [clearAll]);
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
