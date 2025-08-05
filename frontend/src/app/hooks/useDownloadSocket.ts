@@ -1,10 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
 import { useDownloadStore } from "@/store/downloadStore";
+import { useTierStore } from "@/store/tierStore";
 
 const WS_BASE_URL = "ws://localhost:8001/ws/downloads/";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 초기 재연결 시간 1초
+const tier = useTierStore.getState().tier;
 
 interface ProgressEvent {
   job_id: string;
@@ -14,7 +16,6 @@ interface ProgressEvent {
   client_id: string;
 }
 
-// clientId를 동적으로 삽입
 export default function useDownloadSocket(clientId: string) {
   const socketRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0); // 재시도 횟수
@@ -34,7 +35,7 @@ export default function useDownloadSocket(clientId: string) {
 
     socket.onopen = () => {
       console.log("[WS] Connected");
-      // 리트 초기화
+      // 연결 성공 시 재시도 횟수 초기화
       retryCountRef.current = 0;
       retryDelayRef.current = INITIAL_DELAY;
     };
@@ -49,6 +50,22 @@ export default function useDownloadSocket(clientId: string) {
           content: data.content_name,
           clientId: data.client_id,
         });
+
+        // 다운로드 완료되면 iframe 생성
+        if (data.status === "success" && data.percent === 100) {
+          const iframeId = `iframe-${data.job_id}`;
+          document.getElementById(iframeId)?.remove(); // 중복 제거
+          const iframe = document.createElement("iframe");
+          iframe.id = iframeId;
+          iframe.style.display = "none";
+
+          const API_BASE =
+            process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const downloadUrl = `${API_BASE}/api/download/${data.job_id}/?client_id=${data.client_id}&tier=${tier}`;
+
+          iframe.src = downloadUrl;
+          document.body.appendChild(iframe);
+        }
       } catch (e) {
         console.error("[WS] Message parse error", e);
       }

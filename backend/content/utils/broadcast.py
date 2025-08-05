@@ -1,7 +1,7 @@
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-def broadcast_download(request_id, content_name, client_id, progress):
+def broadcast_download(request_id, content_name, client_id, progress, content_id=None):
     channel_layer = get_channel_layer()
     group_name = f"downloads_{client_id}"
     async_to_sync(channel_layer.group_send)(
@@ -13,5 +13,6 @@ def broadcast_download(request_id, content_name, client_id, progress):
             "percent": progress,
             "content_name": content_name,
             "client_id":    client_id,
+            "content_id":   content_id,
         }
     )

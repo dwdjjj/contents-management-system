@@ -1,3 +1,4 @@
+from datetime import time, timezone
 from celery import shared_task
 from .models import Content, DownloadJob
 import os
@@ -38,9 +39,59 @@ def convert_content(self, content_id):
     
 @shared_task(bind=True, max_retries=3, default_retry_delay=5)
 def process_download_job(self, job_id):
-    job = DownloadJob.objects.get(pk=job_id)
+    from .utils.broadcast import broadcast_download
+    from .models import DownloadHistory
+
+    job = DownloadJob.objects.select_related("content").get(pk=job_id)
+
     if job.status != DownloadJob.STATUS_PENDING:
         return
+
+    job.status = DownloadJob.STATUS_INPROGRESS
+    job.started_at = timezone.now()
+    job.save()
+
+    request_id = f"{job.content.name}-{job.id}"
+    client_id = job.client_id
+    content = job.content
+    total_size = content.file.size
+
+    try:
+        with content.file.open('rb') as f:
+            sent = 0
+            while True:
+                chunk = f.read(1024 * 32)  # 32KB씩 읽음
+                if not chunk:
+                    break
+                sent += len(chunk)
+                progress = int((sent / total_size) * 100)
+                job.percent = progress
+                job.save(update_fields=['percent'])
+                broadcast_download(request_id, content.name, client_id, progress, content.id)
+                time.sleep(0.2)  # 시뮬레이션용 지연
+
+        job.status = DownloadJob.STATUS_SUCCESS
+        job.finished_at = timezone.now()
+        job.save()
+
+        DownloadHistory.objects.create(
+            content=content,
+            client_id=client_id,
+            success=True
+        )
+
+    except Exception as e:
+        job.status = DownloadJob.STATUS_FAILED
+        job.save()
+
+        DownloadHistory.objects.create(
+            content=content,
+            client_id=client_id,
+            success=False
+        )
+
+        broadcast_download(request_id, content.name, client_id, 0, content.id)
+        raise self.retry(exc=e)
 
 @shared_task
 def schedule_downloads():
