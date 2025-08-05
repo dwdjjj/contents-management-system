@@ -1,4 +1,5 @@
-from datetime import time, timezone
+from django.utils import timezone
+import time
 from celery import shared_task
 from .models import Content, DownloadJob
 import os

@@ -6,6 +6,8 @@ type ProgressInfo = {
   content: string;
   clientId: string;
   percent: number;
+  content_id: number;
+  download_url: string;
 };
 
 type DownloadStore = {

@@ -23,4 +23,6 @@ class DownloadConsumer(AsyncJsonWebsocketConsumer):
             "percent": event["percent"],
             "content_name": event["content_name"],
             "client_id":    event["client_id"],
+            "content_id":  event.get("content_id"),
+            "download_url": event.get("download_url"),
         })

@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
 import { useDownloadStore } from "@/store/downloadStore";
-import { useTierStore } from "@/store/tierStore";
+// import { useTierStore } from "@/store/tierStore";
 
 const WS_BASE_URL = "ws://localhost:8001/ws/downloads/";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 초기 재연결 시간 1초
-const tier = useTierStore.getState().tier;
+// const tier = useTierStore.getState().tier;
 
 interface ProgressEvent {
   job_id: string;
@@ -14,6 +14,8 @@ interface ProgressEvent {
   percent: number;
   content_name: string;
   client_id: string;
+  content_id: number;
+  download_url: string;
 }
 
 export default function useDownloadSocket(clientId: string) {
@@ -49,19 +51,31 @@ export default function useDownloadSocket(clientId: string) {
           percent: data.percent,
           content: data.content_name,
           clientId: data.client_id,
+          content_id: data.content_id,
+          download_url: data.download_url,
         });
+        console.log("ws 메시지 수신 데이터", data);
 
         // 다운로드 완료되면 iframe 생성
-        if (data.status === "success" && data.percent === 100) {
+        if (
+          data.status === "success" &&
+          data.percent === 100 &&
+          data.download_url
+        ) {
+          // const link = document.createElement("a");
+          // link.href = data.download_url;
+          // link.download = "";
+          // document.body.appendChild(link);
+          // link.click();
+          // document.body.removeChild(link);
+
           const iframeId = `iframe-${data.job_id}`;
           document.getElementById(iframeId)?.remove(); // 중복 제거
           const iframe = document.createElement("iframe");
           iframe.id = iframeId;
           iframe.style.display = "none";
 
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-          const downloadUrl = `${API_BASE}/api/download/${data.job_id}/?client_id=${data.client_id}&tier=${tier}`;
+          const downloadUrl = data.download_url;
 
           iframe.src = downloadUrl;
           document.body.appendChild(iframe);

@@ -1,3 +1,4 @@
+import os
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
@@ -6,10 +7,12 @@ from .models import Content, DownloadJob, DownloadHistory
 from .utils.score import get_final_score
 from .utils.fallback import get_fallback_content
 from .utils.load_balancer import select_best_content
+from django.http import FileResponse
 from django.utils.timezone import now
 from django.utils import timezone
 from django.db import transaction
 from .tasks import schedule_downloads
+from urllib.parse import quote as urlquote
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -194,3 +197,13 @@ def get_download_history(request, client_id):
         for h in histories
     ]
     return Response(data)
+
+@api_view(['GET'])
+def download_direct(request, content_id):
+    content = get_object_or_404(Content, id=content_id)
+    file_path = content.file.path
+    filename = os.path.basename(file_path)
+
+    response = FileResponse(open(file_path, 'rb'), content_type='application/octet-stream')
+    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{urlquote(filename)}"
+    return response

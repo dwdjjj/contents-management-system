@@ -147,3 +147,5 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+SITE_DOMAIN = "http://localhost:8000" # 배포시 실제 도메인으로 변경 -> os.environ.get("SITE_DOMAIN", "https://도메인명.com")
