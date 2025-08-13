@@ -2,6 +2,7 @@
 backend/__pycache__/
 backend/db.sqlite3
 backend/media
+backend/.env
 *.pyc
 *.pyo
 *.log
@@ -20,3 +21,6 @@ frontend/.env*
 # OS
 .DS_Store
 Thumbs.db
+
+# backup
+backup/*

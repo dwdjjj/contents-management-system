@@ -25,8 +25,28 @@ SECRET_KEY = 'django-insecure-u@ado94m69w=+$&-xi9d(i0e-2$kdw5wbzenc%un_2(-(7^zx)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost", "127.0.0.1", "[::1]",
+    "121.143.10.69",               #내 공인 IP
+    # "your-domain.com",           # 도메인 사용 시
+]
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# 프론트/리버스프록시 등에서 넘어오는 Origin을 CSRF에서 신뢰
+CSRF_TRUSTED_ORIGINS = [
+    "http://121.143.10.69:8000",
+    "http://121.143.10.69:3000",
+    "http://localhost:3000",
+    'http://edge', 'https://*.trycloudflare.com'
+    # "https://your-domain.com",
+]
+
+# CORS 설정
+CORS_ALLOWED_ORIGINS = [
+    "http://121.143.10.69:3000",
+    "http://localhost:3000",
+    # "https://your-domain.com",
+]
 
 # Application definition
 
@@ -46,6 +66,8 @@ INSTALLED_APPS = [
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_TASK_TIME_LIMIT = 600
+CELERY_TASK_SOFT_TIME_LIMIT = 600
 
 # 동시 실행할 다운로드 작업 최대 개수
 DOWNLOAD_CONCURRENCY_LIMIT = 3
@@ -130,6 +152,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
