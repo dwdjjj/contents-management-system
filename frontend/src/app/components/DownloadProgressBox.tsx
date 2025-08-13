@@ -129,7 +129,7 @@ export default function DownloadProgressBox() {
                 {!h.success && (
                   <button
                     className="px-2 py-1 text-xs border border-blue-600 rounded hover:bg-blue-50 text-blue-600"
-                    onClick={() => downloadContent(h.content)}
+                    onClick={() => downloadContent(h.content, h.content_id)}
                   >
                     재다운로드
                   </button>

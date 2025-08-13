@@ -9,5 +9,5 @@ urlpatterns = [
     path('contents/', list_all_contents),
     path('download/<int:content_id>/', download_proxy),
     path('download-history/<str:client_id>/', get_download_history),
-    path('download-direct/<int:content_id>/', download_direct),
+    path('download-direct/<int:content_id>/', download_direct, name='download_direct'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

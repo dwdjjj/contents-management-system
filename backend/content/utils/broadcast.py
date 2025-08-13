@@ -2,6 +2,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.conf import settings
 from ..models import Content
+from django.urls import reverse
 
 def broadcast_download(request_id, content_name, client_id, progress, content_id=None):
     channel_layer = get_channel_layer()
@@ -19,13 +20,13 @@ def broadcast_download(request_id, content_name, client_id, progress, content_id
             print(f"[broadcast] full url: {settings.SITE_DOMAIN}{content.file.url}")
 
             if content.file:
-                # download_url = f"{settings.SITE_DOMAIN}{content.file.url}"
-                download_url = f"{settings.SITE_DOMAIN}/api/download-direct/{content.id}/"
+                # download_url = f"{settings.SITE_DOMAIN}{content.file.url}" / 기존: f"{settings.SITE_DOMAIN}/api/download-direct/{content.id}/"
+                download_url = reverse("download_direct", args=[content.id])
             else:
                 print(f"[broadcast] Content({content_id}) 파일이 없음.")
         except Content.DoesNotExist:
             print(f"[broadcast] Content({content_id}) 존재하지 않음.")
-
+            pass
     async_to_sync(channel_layer.group_send)(
         group_name,
         {

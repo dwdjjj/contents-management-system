@@ -6,7 +6,7 @@ import { useDownloadStore } from "@/store/downloadStore";
 const WS_BASE_URL = "ws://localhost:8001/ws/downloads/";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 초기 재연결 시간 1초
-// const tier = useTierStore.getState().tier;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface ProgressEvent {
   job_id: string;
@@ -15,7 +15,7 @@ interface ProgressEvent {
   content_name: string;
   client_id: string;
   content_id: number;
-  download_url: string;
+  download_url: string; // 서버에서 /api/download-direct/<id>/ 형태로 내려오도록 구성
 }
 
 export default function useDownloadSocket(clientId: string) {
@@ -54,31 +54,26 @@ export default function useDownloadSocket(clientId: string) {
           content_id: data.content_id,
           download_url: data.download_url,
         });
-        console.log("ws 메시지 수신 데이터", data);
+        // console.log("ws 메시지 수신 데이터", data);
 
-        // 다운로드 완료되면 iframe 생성
+        // 다운로드 완료되면
         if (
           data.status === "success" &&
           data.percent === 100 &&
           data.download_url
         ) {
-          // const link = document.createElement("a");
-          // link.href = data.download_url;
-          // link.download = "";
-          // document.body.appendChild(link);
-          // link.click();
-          // document.body.removeChild(link);
+          // 상대경로면 API_BASE 붙여 절대 경로로
+          const href = data.download_url.startsWith("http")
+            ? data.download_url
+            : `${API_BASE}${data.download_url}`;
 
-          const iframeId = `iframe-${data.job_id}`;
-          document.getElementById(iframeId)?.remove(); // 중복 제거
-          const iframe = document.createElement("iframe");
-          iframe.id = iframeId;
-          iframe.style.display = "none";
-
-          const downloadUrl = data.download_url;
-
-          iframe.src = downloadUrl;
-          document.body.appendChild(iframe);
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = "";
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         }
       } catch (e) {
         console.error("[WS] Message parse error", e);
@@ -96,7 +91,7 @@ export default function useDownloadSocket(clientId: string) {
       if (!isMounted.current || retryCountRef.current >= MAX_RETRIES) return;
 
       const delay = retryDelayRef.current;
-      console.log(`[WS] ${delay}m 후 재연결 시도...`);
+      console.log(`[WS] ${delay}ms 후 재연결 시도...`);
       setTimeout(() => {
         retryCountRef.current += 1;
         retryDelayRef.current *= 2;

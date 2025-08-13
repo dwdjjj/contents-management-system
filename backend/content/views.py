@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.db import transaction
 from .tasks import schedule_downloads
 from urllib.parse import quote as urlquote
+from django.urls import reverse
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -32,8 +33,9 @@ def get_best_content(request):
         contents = contents.exclude(type='original')
 
     # 점수 계산 (호환성 + 실패율 패널티 포함)
+    client_id = request.data.get('client_id') or request.META.get('REMOTE_ADDR', 'client-x')
     scored_contents = [
-        (get_final_score(content, device_info, content.meta_info), content)
+        (get_final_score(content, device_info, client_id), content)
         for content in contents
     ]
     scored_contents.sort(key=lambda x: x[0], reverse=True)
@@ -67,7 +69,9 @@ def get_best_content(request):
     return Response({
         'fallback': False,
         'id': best_content.id,
-        'download_url': request.build_absolute_uri(best_content.file.url),
+        'download_url': request.build_absolute_uri(
+        reverse('download_direct', args=[best_content.id])
+        ),
         'type': best_content.type,
         'version': best_content.version
     })
@@ -171,7 +175,8 @@ def download_proxy(request, content_id):
             client_id=client_id,
             priority=priority,
         )
-        transaction.on_commit(lambda: schedule_downloads.delay())
+        schedule_downloads.delay()  # on_commit 제거
+        # transaction.on_commit(lambda: schedule_downloads.delay())
 
     return Response({
         "job_id": job.id,
