@@ -7,13 +7,13 @@ from .models import Content, DownloadJob, DownloadHistory
 from .utils.score import get_final_score
 from .utils.fallback import get_fallback_content
 from .utils.load_balancer import select_best_content
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, Http404
 from django.utils.timezone import now
 from django.utils import timezone
-from django.db import transaction
-from .tasks import schedule_downloads
 from urllib.parse import quote as urlquote
 from django.urls import reverse
+from .permissions import can_download
+from .utils.paths import rel_media_path
 
 # 클라이언트 요청 시, 디바이스 기반으로 콘텐츠 매칭해서 다운로드 URL 반환
 @api_view(['POST'])
@@ -150,11 +150,10 @@ def upload_content(request):
 CHUNK_SIZE = 8 * 1024  # 8KB
 
 @api_view(['GET'])
-def download_proxy(request, content_id):
+def download_job(request, content_id):
 
     content = get_object_or_404(Content, id=content_id)
     client_id = request.GET.get('client_id') or request.META.get('REMOTE_ADDR', 'client-x')
-
     tier = request.GET.get('tier', 'free')
     tier_priority = {'free': 0, 'standard': 1, 'premium': 2}
     priority = tier_priority.get(tier, 0)
@@ -169,19 +168,25 @@ def download_proxy(request, content_id):
         ]
     ).first()
 
+    created = False
     if not job:
         job = DownloadJob.objects.create(
-            content=content,
-            client_id=client_id,
-            priority=priority,
+            content=content, client_id=client_id, priority=priority
         )
-        schedule_downloads.delay()  # on_commit 제거
-        # transaction.on_commit(lambda: schedule_downloads.delay())
+        created = True
+        # Celery 스케줄링 트리거
+        from .tasks import schedule_downloads
+        schedule_downloads.delay()
 
+    message = ("다운로드 작업이 큐에 등록되었습니다." if created else "이미 다운로드가 진행 중입니다.")
     return Response({
         "job_id": job.id,
         "status": job.status,
-        "message": "다운로드 작업이 큐에 등록되었습니다." if job.status == 'pending' else "이미 다운로드가 진행 중입니다."
+        "percent": job.percent,  # 있으면 UI에 표시
+        "secure_download_url": request.build_absolute_uri(
+            reverse('download_secure', args=[content.id])
+        ) + f"?job_id={job.id}",
+        "message": message
     })
 
 @api_view(['GET'])
@@ -203,6 +208,38 @@ def get_download_history(request, client_id):
     ]
     return Response(data)
 
+# 보안 다운로드(권한/상태 확인 → X-Accel-Redirect)
+@api_view(['GET'])
+def download_secure(request, content_id):
+    content = get_object_or_404(Content, id=content_id)
+    job_id  = request.GET.get("job_id")
+
+    # 준비 상태 확인
+    if job_id:
+        job = DownloadJob.objects.filter(id=job_id, content=content).first()
+        if not job:
+            return Response({"error": "invalid job"}, status=400)
+        if job.status != DownloadJob.STATUS_SUCCESS:
+            return Response({"status": job.status}, status=425)  # Too Early
+
+    # 권한 판정
+    if not can_download(request.user, content, job_id):
+        return HttpResponseForbidden("no permission")
+
+    # 실제 전송은 Nginx가
+    if not content.file:
+        raise Http404("file missing")
+
+    rel = rel_media_path(content.file.path)
+    filename = urlquote(os.path.basename(content.file.name))
+
+    resp = HttpResponse()
+    resp["Content-Type"] = "application/octet-stream"
+    resp["Content-Disposition"] = f"attachment; filename*=UTF-8''{filename}"
+    resp["X-Accel-Redirect"] = f"/protected/{rel}"
+    return resp
+
+# 개발/내부 테스트용 - 기존 direct는 유지(공개 배포용으로는 비권장)
 @api_view(['GET'])
 def download_direct(request, content_id):
     content = get_object_or_404(Content, id=content_id)
