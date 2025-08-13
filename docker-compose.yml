@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: edge
+    depends_on: [next, api_http, api_ws]
+    ports:
+      - "80:80"
+      # - "443:443"  # (포트포워딩+TLS 때)
+    volumes:
+      - ./nginx/app.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/var/www/static:ro
+      - media_volume:/var/www/media:ro
+      - ./nginx/log:/var/log/nginx
+    restart: unless-stopped
+
+  next:
+    build: ./frontend
+    container_name: next
+    environment:
+      - NODE_ENV=production
+    expose: ["3000"]
+    restart: unless-stopped
+
+  api_http:
+    build: ./backend
+    container_name: api-http
+    working_dir: /app/backend
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+    environment:
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=*
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+      - CSRF_TRUSTED_ORIGINS=http://localhost http://127.0.0.1 http://edge https://*.trycloudflare.com
+    expose: ["8000"]
+    depends_on: [redis]
+    volumes:
+      - static_volume:/app/backend/staticfiles
+      - media_volume:/app/backend/media
+      - ./backend/db.sqlite3:/app/backend/db.sqlite3
+    restart: unless-stopped
+
+  api_ws:
+    build: ./backend
+    container_name: api-ws
+    working_dir: /app/backend
+    command: daphne -b 0.0.0.0 -p 8001 backend.asgi:application
+    environment:
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=*
+    expose: ["8001"]
+    depends_on: [redis]
+    volumes:
+      - media_volume:/app/backend/media # (WS에서 파일 경로 접근 필요 시)
+      - ./backend/db.sqlite3:/app/backend/db.sqlite3
+    restart: unless-stopped
+
+  celery_worker:
+    build: ./backend
+    container_name: worker
+    working_dir: /app/backend
+    command: celery -A backend worker -l info --concurrency=2
+    environment:
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=*
+    depends_on: [redis]
+    volumes:
+      - media_volume:/app/backend/media
+      - ./backend/db.sqlite3:/app/backend/db.sqlite3 # ← SQLite 쓰는 동안 필수
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    expose: ["6379"]
+    restart: unless-stopped
+
+  # (선택) Cloudflare Quick Tunnel: 바로 공개 URL 발급
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tunnel
+    depends_on: [nginx]
+    command: tunnel --no-autoupdate --url http://nginx:80
+    restart: unless-stopped
+
+volumes:
+  static_volume:
+  media_volume:
