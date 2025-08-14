@@ -3,9 +3,11 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/endpoints";
+import { useUploadContent, type UploadForm } from "@/hooks/useUpload";
 
 export default function ContentUploadPage() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<UploadForm>({
     name: "",
     version: "1.0.0",
     type: "original",
@@ -14,14 +16,18 @@ export default function ContentUploadPage() {
     resolution: "1080p",
   });
   const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { upload, loading, lastError } = useUploadContent();
   const router = useRouter();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "min_memory" ? Number(value) : (value as any),
+    }));
   };
 
   const handleFileClick = () => {
@@ -30,26 +36,12 @@ export default function ContentUploadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return setMessage("📂 파일을 선택해주세요.");
+    if (!file) return alert("📂 파일을 선택해주세요.");
 
-    const formData = new FormData();
-    Object.entries(form).forEach(([key, value]) =>
-      formData.append(key, String(value))
-    );
-    formData.append("file", file);
-
-    const res = await fetch("http://localhost:8000/api/upload-content/", {
-      method: "POST",
-      body: formData,
-    });
-
+    const res = await upload(form, file);
     if (res.ok) {
-      const data = await res.json();
-      alert("✅ 업로드 완료: " + data.name);
-      router.push("/"); // ✅ 대시보드로 이동
-    } else {
-      const data = await res.json();
-      setMessage(`❌ 오류: ${data.error || "알 수 없는 오류"}`);
+      alert(`✅ 업로드 완료: ${res.data?.name ?? form.name}`);
+      router.push("/");
     }
   };
 
@@ -138,14 +130,17 @@ export default function ContentUploadPage() {
           </Link>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hover:cursor-pointer"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hover:cursor-pointer disabled:opacity-60"
+            disabled={loading}
           >
-            업로드
+            {loading ? "업로드 중..." : "업로드"}
           </button>
         </div>
       </form>
 
-      {message && <p className="mt-4 text-sm text-gray-700">{message}</p>}
+      {lastError && (
+        <p className="mt-4 text-sm text-red-500">❌ 오류: {lastError}</p>
+      )}
     </main>
   );
 }
