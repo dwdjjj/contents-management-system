@@ -1,12 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
 import { useDownloadStore } from "@/store/downloadStore";
-// import { useTierStore } from "@/store/tierStore";
+import { wsUrl, apiUrl } from "@/lib/endpoints";
 
-const WS_BASE_URL = "ws://localhost:8001/ws/downloads/";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 초기 재연결 시간 1초
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface ProgressEvent {
   job_id: string;
@@ -27,12 +25,13 @@ export default function useDownloadSocket(clientId: string) {
 
   const connect = useCallback(() => {
     if (!isMounted.current) return;
-    const wsUrl = `${WS_BASE_URL}${clientId}/`;
 
+    const url = wsUrl(`/downloads/${clientId}/`);
     console.log(
       `[WS] 연결 시도중... (시도횟수 : ${retryCountRef.current + 1})`
     );
-    const socket = new WebSocket(wsUrl);
+
+    const socket = new WebSocket(url);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -62,10 +61,14 @@ export default function useDownloadSocket(clientId: string) {
           data.percent === 100 &&
           data.download_url
         ) {
-          // 상대경로면 API_BASE 붙여 절대 경로로
-          const href = data.download_url.startsWith("http")
+          // 1) 절대 URL이면 그대로
+          // 2) "/api/..." 로 온 경우: 현재 호스트 기준으로 붙임
+          // 3) 그 외 상대 경로: apiUrl() 로 /api 프록시 경로에 붙임
+          const href = /^https?:\/\//i.test(data.download_url)
             ? data.download_url
-            : `${API_BASE}${data.download_url}`;
+            : data.download_url.startsWith("/api/")
+            ? `${window.location.origin}${data.download_url}`
+            : apiUrl(data.download_url);
 
           const a = document.createElement("a");
           a.href = href;

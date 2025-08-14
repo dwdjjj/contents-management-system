@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiUrl } from "@/lib/endpoints";
 
 export interface DeviceInfo {
   chipset: string;
@@ -21,6 +21,14 @@ export interface ContentItem {
   }>;
 }
 
+export interface DownloadHistoryItem {
+  id: number;
+  content: string;
+  content_id: number;
+  success: boolean;
+  timestamp: string;
+}
+
 export async function fetchBestContent(
   deviceInfo: DeviceInfo,
   requestedContent: string,
@@ -33,7 +41,7 @@ export async function fetchBestContent(
   version: string;
   fallback: boolean;
 }> {
-  const res = await fetch(`${API_BASE}/api/get-content/`, {
+  const res = await fetch(apiUrl("get-content/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -51,23 +59,30 @@ export async function fetchBestContent(
 }
 
 export async function fetchContents(): Promise<ContentItem[]> {
-  const res = await fetch(`${API_BASE}/api/contents/`);
+  const res = await fetch(apiUrl("/contents/"), { credentials: "include" });
   if (!res.ok) throw new Error("콘텐츠 목록 불러오기 실패");
   return res.json();
-}
-
-export interface DownloadHistoryItem {
-  id: number;
-  content: string;
-  content_id: number;
-  success: boolean;
-  timestamp: string;
 }
 
 export async function fetchDownloadHistory(
   clientId: string
 ): Promise<DownloadHistoryItem[]> {
-  const res = await fetch(`${API_BASE}/api/download-history/${clientId}/`);
+  const res = await fetch(
+    apiUrl(`/download-history/${encodeURIComponent(clientId)}/`)
+  );
   if (!res.ok) throw new Error("다운로드 기록 불러오기 실패");
+  return res.json();
+}
+
+export async function uploadContent(form: FormData) {
+  const res = await fetch(apiUrl("/upload-content/"), {
+    method: "POST",
+    body: form,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`업로드 실패: ${res.status} ${text}`);
+  }
   return res.json();
 }
